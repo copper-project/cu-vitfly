@@ -1,0 +1,25 @@
+[package]
+name = "cu-vitfly"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Standalone Candle inference for the ViTFly ViT+LSTM depth policy"
+
+[features]
+default = []
+cuda = ["candle-core/cuda", "candle-nn/cuda"]
+
+[dependencies]
+candle-core = "0.11.0"
+candle-nn = "0.11.0"
+
+[dev-dependencies]
+anyhow = "1.0"
+
+[[example]]
+name = "synthetic_depth"
+path = "examples/synthetic_depth.rs"
+
+[[example]]
+name = "benchmark"
+path = "examples/benchmark.rs"
