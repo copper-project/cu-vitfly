@@ -15,9 +15,24 @@ The low-level API intentionally keeps the trained model's tensor contract:
   typed state returned by the preceding call
 - prediction: `[1, 3]`, F32
 
-Depth-camera unit conversion, resizing, and command postprocessing belong in the
-future Copper task. This crate starts at the normalized model tensor so those
-policy decisions stay outside the inference core.
+The low-level model remains available for parity work. For applications, the
+crate also exports `VitFlyTask`, a redistributable Copper task with this standard
+message contract:
+
+- inputs: `cu_zed::ZedDepthMap<Vec<f32>>`, `cu_ahrs::AhrsPose`, and
+  `cu29::units::si::f32::Velocity`
+- output: `cu_vitfly::VitFlyVelocity`, an XYZ array of unit-safe Copper
+  velocities in `[forward, left, up]` order
+
+The task resizes ZED depth in meters to 60x90 with bilinear filtering, normalizes
+it using `max_depth_m` (12.5 m by default), replaces invalid samples with
+`invalid_depth` (0.8 by default), converts AHRS Euler angles to the model's
+scalar-first quaternion, and preserves the LSTM state across frames and Copper
+keyframes.
+
+Task configuration accepts `device` (`"cuda"` or `"cpu"`), `cuda_ordinal`,
+`max_depth_m`, and `invalid_depth`. CUDA is the default crate feature and task
+device. Portable CPU builds use `--no-default-features` and default to CPU.
 
 ## Follow the port step by step
 
@@ -32,7 +47,7 @@ final three-value prediction.
 Run the complete CPU validation with:
 
 ```text
-cargo test --release
+cargo test --release --no-default-features
 ```
 
 Run the standalone recurrent example with:
@@ -52,16 +67,16 @@ port, run:
 cargo test --release pytorch_layer_by_layer_cpu_parity -- --nocapture
 ```
 
-CUDA is feature-gated so CPU users do not need a CUDA toolkit:
+CUDA is enabled by default. Run its parity test with:
 
 ```text
-cargo test --release --features cuda
+cargo test --release
 ```
 
 The sample can run on the same CUDA backend with:
 
 ```text
-cargo run --release --features cuda --example synthetic_depth -- --cuda
+cargo run --release --example synthetic_depth -- --cuda
 ```
 
 For a synchronized one-frame latency check, use the `benchmark` example with

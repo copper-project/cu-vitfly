@@ -5,8 +5,10 @@
 //! quaternion `[1, 4]`, and an optional recurrent state.
 
 mod model;
+mod task;
 
 pub use model::{
     ATTITUDE_SHAPE, DEPTH_SHAPE, DESIRED_VELOCITY_SHAPE, ForwardTrace, INPUT_HEIGHT, INPUT_WIDTH,
     OUTPUT_SHAPE, RECURRENT_SHAPE, VitFly, VitFlyState,
 };
+pub use task::{VitFlyTask, VitFlyVelocity};
