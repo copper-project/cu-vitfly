@@ -23,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_UPSTREAM = ROOT.parent / "vitfly"
 
 
-def write_safetensors(path: Path, tensors: dict[str, torch.Tensor]) -> None:
+def write_safetensors(
+    path: Path, tensors: dict[str, torch.Tensor], source: str
+) -> None:
     """Write contiguous F32 tensors using the documented Safetensors layout."""
     header: OrderedDict[str, object] = OrderedDict()
     payloads: list[bytes] = []
@@ -39,7 +41,7 @@ def write_safetensors(path: Path, tensors: dict[str, torch.Tensor]) -> None:
         payloads.append(payload)
         offset += len(payload)
     header["__metadata__"] = {
-        "source": "vitfly ViTLSTM_model.pth",
+        "source": source,
         "spectral_norm": "materialized before export",
     }
     encoded = json.dumps(header, separators=(",", ":")).encode("utf-8")
@@ -144,15 +146,25 @@ def trace_forward(model, depth, desired_velocity, attitude, state=None):
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--upstream", type=Path, default=DEFAULT_UPSTREAM)
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="checkpoint to export (defaults to the upstream published model)",
+    )
     args = parser.parse_args()
     upstream = args.upstream.resolve()
+    checkpoint_path = (
+        args.checkpoint.resolve()
+        if args.checkpoint is not None
+        else upstream / "models" / "ViTLSTM_model.pth"
+    )
     sys.path.insert(0, str(upstream / "models"))
     from model import LSTMNetVIT  # pylint: disable=import-error,import-outside-toplevel
 
     torch.manual_seed(0)
     model = LSTMNetVIT().cpu().float()
     checkpoint = torch.load(
-        upstream / "models" / "ViTLSTM_model.pth",
+        checkpoint_path,
         map_location="cpu",
         weights_only=True,
     )
@@ -169,7 +181,10 @@ def main() -> None:
     torch.testing.assert_close(reference_before, reference_after, rtol=1e-6, atol=1e-6)
 
     weights = {name: value for name, value in model.state_dict().items()}
-    write_safetensors(ROOT / "weights" / "vitfly-vitlstm-f32.safetensors", weights)
+    source = f"vitfly {checkpoint_path.name}"
+    write_safetensors(
+        ROOT / "weights" / "vitfly-vitlstm-f32.safetensors", weights, source
+    )
 
     fixtures: dict[str, torch.Tensor] = {}
     state = None
@@ -203,7 +218,9 @@ def main() -> None:
             for name, tensor in trace.items():
                 fixtures[f"sample{sample_index}.{name}"] = tensor
 
-    write_safetensors(ROOT / "fixtures" / "pytorch-parity.safetensors", fixtures)
+    write_safetensors(
+        ROOT / "fixtures" / "pytorch-parity.safetensors", fixtures, source
+    )
     print(f"exported {len(weights)} weights and {len(fixtures)} fixture tensors")
 
 
