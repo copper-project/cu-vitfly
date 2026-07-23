@@ -9,19 +9,21 @@ description = "Standalone Candle inference for the ViTFly ViT+LSTM depth policy"
 default = ["cuda"]
 cuda = ["candle-core/cuda", "candle-nn/cuda"]
 
-[patch.crates-io]
+[patch."https://github.com/copper-project/copper-rs.git"]
 cu-ahrs = { path = "../copper-rs/components/tasks/cu_ahrs" }
 cu-sensor-payloads = { path = "../copper-rs/components/payloads/cu_sensor_payloads" }
 cu-transform = { path = "../copper-rs/components/libs/cu_transform" }
-cu-zed = { path = "../zed/components/sources/cu_zed" }
 cu29 = { path = "../copper-rs/core/cu29" }
+
+[patch."https://github.com/copper-project/zed.git"]
+cu-zed = { path = "../zed/components/sources/cu_zed" }
 
 [dependencies]
 candle-core = "0.11.0"
 candle-nn = "0.11.0"
-cu-ahrs = "1.1.0-dev"
-cu-zed = "1.1.0-dev"
-cu29 = { version = "1.1.0-dev", default-features = false, features = ["reflect", "std", "units"] }
+cu-ahrs = { git = "https://github.com/copper-project/copper-rs.git", branch = "master" }
+cu-zed = { git = "https://github.com/copper-project/zed.git", branch = "master" }
+cu29 = { git = "https://github.com/copper-project/copper-rs.git", branch = "master", default-features = false, features = ["reflect", "std", "units"] }
 
 [dev-dependencies]
 anyhow = "1.0"
