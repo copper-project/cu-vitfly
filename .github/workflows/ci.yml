@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check against copper-rs and Zed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out ViTFly
+        uses: actions/checkout@v6
+        with:
+          path: cu-vitfly
+
+      - name: Check out copper-rs master
+        uses: actions/checkout@v6
+        with:
+          repository: copper-project/copper-rs
+          ref: master
+          path: copper-rs
+
+      - name: Check out Zed master
+        uses: actions/checkout@v6
+        with:
+          repository: copper-project/zed
+          ref: master
+          path: zed
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Reject Cargo Git dependencies
+        run: |
+          if rg -n --glob Cargo.toml \
+            '(^|[,{[:space:]])(git|branch|rev|tag)[[:space:]]*=|\[patch\."https?://' \
+            cu-vitfly copper-rs zed; then
+            echo "Cargo Git dependencies are forbidden; use local path dependencies." >&2
+            exit 1
+          fi
+
+      - name: Check
+        run: cargo check --all-targets --no-default-features
+        working-directory: cu-vitfly
