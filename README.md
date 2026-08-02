@@ -19,7 +19,7 @@ The low-level model remains available for parity work. For applications, the
 crate also exports `VitFlyTask`, a redistributable Copper task with this standard
 message contract:
 
-- inputs: `cu_zed::ZedDepthMap<Vec<f32>>`, `cu_ahrs::AhrsPose`, and
+- inputs: `cu_zed::ZedDepthMap`, `cu_ahrs::AhrsPose`, and
   `cu29::units::si::f32::Velocity`
 - output: `cu_vitfly::VitFlyVelocity`, an XYZ array of unit-safe Copper
   velocities in `[forward, left, up]` order
