@@ -6,6 +6,7 @@ use cu29::bincode::{Decode, Encode};
 use cu29::prelude::*;
 use cu29::units::si::angle::radian;
 use cu29::units::si::f32::Velocity;
+use cu29::units::si::length::meter;
 use cu29::units::si::velocity::meter_per_second;
 
 /// Open-loop world-frame velocity predicted by ViTFly, in `[forward, left, up]` order.
@@ -73,27 +74,22 @@ impl VitFlyTask {
 
     fn run_model(
         &mut self,
-        depth: &ZedDepthMap<Vec<f32>>,
+        depth: &ZedDepthMap,
         pose: &AhrsPose,
         desired_speed: Velocity,
     ) -> CuResult<VitFlyVelocity> {
         let format = depth.format;
         if format.width == 0
             || format.height == 0
-            || format.stride < format.width
-            || format.len_elements() == 0
+            || !format.is_valid()
+            || format.required_elements() == 0
         {
             return Err(CuError::from(
                 "vitfly received an invalid ZED raster format",
             ));
         }
 
-        depth.buffer_handle.with_inner(|samples| {
-            if samples.len() < format.len_elements() {
-                return Err(CuError::from(
-                    "vitfly ZED depth buffer is shorter than its format",
-                ));
-            }
+        depth.with_samples(|samples, format| {
             resize_and_normalize_depth(
                 samples,
                 format.width as usize,
@@ -103,8 +99,7 @@ impl VitFlyTask {
                 self.invalid_depth,
                 &mut self.resized_depth,
             );
-            Ok(())
-        })?;
+        });
 
         let speed_mps = desired_speed.get::<meter_per_second>();
         if !speed_mps.is_finite() || speed_mps < 0.0 {
@@ -190,7 +185,7 @@ impl Freezable for VitFlyTask {
 
 impl CuTask for VitFlyTask {
     type Resources<'r> = ();
-    type Input<'m> = input_msg!('m, ZedDepthMap<Vec<f32>>, AhrsPose, Velocity);
+    type Input<'m> = input_msg!('m, ZedDepthMap, AhrsPose, Velocity);
     type Output<'m> = output_msg!(VitFlyVelocity);
 
     fn new(config: Option<&ComponentConfig>, _resources: Self::Resources<'_>) -> CuResult<Self> {
@@ -259,17 +254,15 @@ fn candle_decode_error(err: candle_core::Error) -> cu29::bincode::error::DecodeE
     cu29::bincode::error::DecodeError::OtherString(err.to_string())
 }
 
-fn normalize_depth(value: f32, max_depth_m: f32, invalid_depth: f32) -> f32 {
-    if value.is_finite() && value > 0.0 {
-        (value / max_depth_m).clamp(0.0, 1.0)
-    } else {
-        invalid_depth
-    }
+fn normalize_depth(sample: u16, max_depth_m: f32, invalid_depth: f32) -> f32 {
+    ZedDepthMap::decode_sample(sample)
+        .map(|depth| (depth.get::<meter>() / max_depth_m).clamp(0.0, 1.0))
+        .unwrap_or(invalid_depth)
 }
 
 #[allow(clippy::too_many_arguments)]
 fn resize_and_normalize_depth(
-    source: &[f32],
+    source: &[u16],
     source_width: usize,
     source_height: usize,
     source_stride: usize,
@@ -334,9 +327,9 @@ mod tests {
 
     #[test]
     fn resize_respects_stride_and_normalizes_meters() {
-        let mut source = vec![99.0; 6 * 2];
-        source[..4].copy_from_slice(&[0.0, 6.25, 12.5, 25.0]);
-        source[6..10].copy_from_slice(&[0.0, 6.25, 12.5, 25.0]);
+        let mut source = vec![u16::MAX; 6 * 2];
+        source[..4].copy_from_slice(&[0, 6_250, 12_500, 25_000]);
+        source[6..10].copy_from_slice(&[0, 6_250, 12_500, 25_000]);
         let mut destination = vec![0.0; INPUT_HEIGHT * INPUT_WIDTH];
         resize_and_normalize_depth(&source, 4, 2, 6, 12.5, 0.8, &mut destination);
         assert_eq!(destination[0], 0.8);
