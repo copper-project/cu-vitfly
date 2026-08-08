@@ -1,6 +1,6 @@
 [package]
 name = "cu-vitfly"
-version = "1.1.0"
+version = "1.2.0-dev"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Standalone Candle inference for the ViTFly ViT+LSTM depth policy"
@@ -20,9 +20,9 @@ cached-path = { version = "0.10.0", default-features = false, features = [
   "progress-bar",
   "rustls-tls",
 ] }
-cu-ahrs = "1.1.0"
-cu-zed = "1.1.0"
-cu29 = { version = "1.1.0", default-features = false, features = ["reflect", "std", "units"] }
+cu-ahrs = { path = "../copper-rs/components/tasks/cu_ahrs", version = "1.2.0-dev" }
+cu-zed = { path = "../zed/components/sources/cu_zed", version = "1.2.0-dev" }
+cu29 = { path = "../copper-rs/core/cu29", version = "1.2.0-dev", default-features = false, features = ["reflect", "std", "units"] }
 
 [dev-dependencies]
 anyhow = "1.0"
