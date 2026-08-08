@@ -1,8 +1,13 @@
+use cached_path::{Cache, Error as CacheError, Options, ProgressBar};
 use candle_core::{D, DType, Device, IndexOp, Module, Result, Shape, Tensor};
 use candle_nn::rnn::LSTMState;
 use candle_nn::{
     Conv2d, Conv2dConfig, LSTM, LSTMConfig, LayerNorm, Linear, RNN, VarBuilder, conv2d, layer_norm,
     linear,
+};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
 };
 
 pub const INPUT_HEIGHT: usize = 60;
@@ -13,7 +18,124 @@ pub const ATTITUDE_SHAPE: [usize; 2] = [1, 4];
 pub const OUTPUT_SHAPE: [usize; 2] = [1, 3];
 pub const RECURRENT_SHAPE: [usize; 2] = [3, 128];
 
-const EMBEDDED_WEIGHTS: &[u8] = include_bytes!("../weights/vitfly-vitlstm-f32.safetensors");
+const MODEL_NAME: &str = "vitfly-vitlstm-f32.safetensors";
+const MODEL_URL: &str = "https://cdn.copper-robotics.com/models/vitfly-vitlstm-f32.safetensors";
+const MODEL_CACHE_DIR: &str = ".download-cache";
+const MODEL_SIZE_BYTES: u64 = 14_264_732;
+
+fn model_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("weights")
+}
+
+fn link_or_copy_cached_model(src: &Path, dst: &Path) -> io::Result<()> {
+    if fs::symlink_metadata(dst).is_ok() {
+        fs::remove_file(dst)?;
+    }
+
+    #[cfg(unix)]
+    {
+        match std::os::unix::fs::symlink(src, dst) {
+            Ok(()) => Ok(()),
+            Err(symlink_err) => fs::copy(src, dst).map(|_| ()).map_err(|copy_err| {
+                io::Error::new(
+                    copy_err.kind(),
+                    format!("failed to symlink ({symlink_err}) or copy ({copy_err})"),
+                )
+            }),
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        match std::os::windows::fs::symlink_file(src, dst) {
+            Ok(()) => Ok(()),
+            Err(symlink_err) => fs::copy(src, dst).map(|_| ()).map_err(|copy_err| {
+                io::Error::new(
+                    copy_err.kind(),
+                    format!("failed to symlink ({symlink_err}) or copy ({copy_err})"),
+                )
+            }),
+        }
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        fs::copy(src, dst).map(|_| ())
+    }
+}
+
+fn cached_model_path(
+    online_cache: &Cache,
+    offline_cache: &Cache,
+) -> std::result::Result<PathBuf, CacheError> {
+    match offline_cache.cached_path(MODEL_URL) {
+        Ok(path) if model_file_is_valid(&path) => Ok(path),
+        Ok(_) => {
+            eprintln!("{MODEL_NAME}: cached file is incomplete; downloading it again");
+            let path =
+                online_cache.cached_path_with_options(MODEL_URL, &Options::default().force())?;
+            validate_model_file(path)
+        }
+        Err(err) => {
+            if matches!(
+                err,
+                CacheError::NoCachedVersions(_) | CacheError::CacheCorrupted(_)
+            ) {
+                eprintln!("{MODEL_NAME}: cache miss; downloading from {MODEL_URL}");
+                let path = online_cache.cached_path(MODEL_URL)?;
+                validate_model_file(path)
+            } else {
+                Err(err)
+            }
+        }
+    }
+}
+
+fn model_file_is_valid(path: &Path) -> bool {
+    fs::metadata(path)
+        .map(|metadata| metadata.len() == MODEL_SIZE_BYTES)
+        .unwrap_or(false)
+}
+
+fn validate_model_file(path: PathBuf) -> std::result::Result<PathBuf, CacheError> {
+    if model_file_is_valid(&path) {
+        Ok(path)
+    } else {
+        Err(CacheError::CacheCorrupted(format!(
+            "{MODEL_NAME} must be {MODEL_SIZE_BYTES} bytes"
+        )))
+    }
+}
+
+fn prepare_model_weights() -> Result<PathBuf> {
+    let weights_root = model_root();
+    let model_path = weights_root.join(MODEL_NAME);
+    if model_file_is_valid(&model_path) {
+        return Ok(model_path);
+    }
+
+    fs::create_dir_all(&weights_root).map_err(candle_core::Error::msg)?;
+    if fs::symlink_metadata(&model_path).is_ok() {
+        fs::remove_file(&model_path).map_err(candle_core::Error::msg)?;
+    }
+
+    let cache_root = weights_root.join(MODEL_CACHE_DIR);
+    let online_cache = Cache::builder()
+        .dir(cache_root.clone())
+        .progress_bar(Some(ProgressBar::Full))
+        .build()
+        .map_err(candle_core::Error::msg)?;
+    let offline_cache = Cache::builder()
+        .dir(cache_root)
+        .offline(true)
+        .progress_bar(None)
+        .build()
+        .map_err(candle_core::Error::msg)?;
+    let cached_path =
+        cached_model_path(&online_cache, &offline_cache).map_err(candle_core::Error::msg)?;
+    link_or_copy_cached_model(&cached_path, &model_path).map_err(candle_core::Error::msg)?;
+    Ok(model_path)
+}
 
 #[derive(Debug, Clone)]
 struct PatchMerge {
@@ -355,9 +477,16 @@ pub struct VitFly {
 }
 
 impl VitFly {
-    /// Loads the model from the F32 Safetensors checkpoint embedded in this crate.
+    /// Loads the model from the locally cached F32 Safetensors checkpoint.
+    ///
+    /// The first call downloads the checkpoint from Copper's CDN into the
+    /// crate's `weights` directory. Later calls reuse that local file.
     pub fn load(device: &Device) -> Result<Self> {
-        let vb = VarBuilder::from_slice_safetensors(EMBEDDED_WEIGHTS, DType::F32, device)?;
+        let weights_path = prepare_model_weights()?;
+        // SAFETY: the stable local model path is created before mapping and is
+        // never modified while the returned model can retain the mapping.
+        let vb =
+            unsafe { VarBuilder::from_mmaped_safetensors(&[weights_path], DType::F32, device)? };
         Self::load_from_var_builder(vb)
     }
 

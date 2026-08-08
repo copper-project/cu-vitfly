@@ -2,7 +2,8 @@
 
 Standalone Rust inference for the pretrained ViTFly ViT+LSTM depth policy,
 implemented with Candle. ROS and the original Python repository are not runtime
-dependencies. The F32 Safetensors weights are embedded into the library binary.
+dependencies. On first use, the F32 Safetensors weights are downloaded from
+Copper's CDN and cached under `weights/`; later runs reuse the local file.
 
 ## Tensor contract
 
@@ -84,8 +85,8 @@ the same optional feature and `--cuda` argument.
 
 ## Reproducing the embedded artifacts
 
-The checked-in runtime is self-contained. Re-exporting is only needed when the
-upstream checkpoint changes:
+The runtime downloads the released checkpoint automatically. Re-exporting is
+only needed when the upstream checkpoint changes:
 
 ```text
 python tools/export_from_pytorch.py --upstream ../vitfly
