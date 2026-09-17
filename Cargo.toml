@@ -20,9 +20,9 @@ cached-path = { version = "0.10.0", default-features = false, features = [
   "progress-bar",
   "rustls-tls",
 ] }
-cu-ahrs = { path = "../copper-rs/components/tasks/cu_ahrs", version = "1.3.0-dev" }
-cu-zed = { path = "../zed/components/sources/cu_zed", version = "1.3.0-dev" }
-cu29 = { path = "../copper-rs/core/cu29", version = "1.3.0-dev", default-features = false, features = [
+cu-ahrs = { version = "=1.3.0-dev" }
+cu-zed = { version = "=1.3.0-dev" }
+cu29 = { version = "=1.3.0-dev", default-features = false, features = [
   "reflect",
   "std",
   "units",
@@ -38,3 +38,10 @@ path = "examples/synthetic_depth.rs"
 [[example]]
 name = "benchmark"
 path = "examples/benchmark.rs"
+
+[patch.crates-io]
+cu-ahrs = { path = "../copper-rs/components/tasks/cu_ahrs" }
+cu-sensor-payloads = { path = "../copper-rs/components/payloads/cu_sensor_payloads" }
+cu-transform = { path = "../copper-rs/components/libs/cu_transform" }
+cu-zed = { path = "../zed/components/sources/cu_zed" }
+cu29 = { path = "../copper-rs/core/cu29" }
