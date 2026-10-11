@@ -1,5 +1,11 @@
 # cu-vitfly
 
+> **Moved to copper-rs:** This crate is now maintained in
+> [`components/tasks/cu_vitfly`](https://github.com/copper-project/copper-rs/tree/master/components/tasks/cu_vitfly).
+> All source code, examples, tests, parity fixtures, and export tooling have been
+> migrated. Please use the monorepo for current documentation, development, and
+> issues. This standalone repository is retained for historical reference.
+
 Standalone Rust inference for the pretrained ViTFly ViT+LSTM depth policy,
 implemented with Candle. ROS and the original Python repository are not runtime
 dependencies. On first use, the F32 Safetensors weights are downloaded from
